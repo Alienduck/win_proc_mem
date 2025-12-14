@@ -207,10 +207,32 @@ fn main() {
                         Some(&mut read),
                     )
                 };
+
+                // Debuging, display the value interpreted
+                let debug_val = if status.is_ok() {
+                    match current_type {
+                        ScanType::F32 => {
+                            format!("{:?}", f32::from_le_bytes(buffer[0..4].try_into().unwrap()))
+                        }
+                        ScanType::F64 => {
+                            format!("{:?}", f64::from_le_bytes(buffer[0..8].try_into().unwrap()))
+                        }
+                        ScanType::I32 => {
+                            format!("{:?}", i32::from_le_bytes(buffer[0..4].try_into().unwrap()))
+                        }
+                        ScanType::I64 => {
+                            format!("{:?}", i64::from_le_bytes(buffer[0..8].try_into().unwrap()))
+                        }
+                    }
+                } else {
+                    "Error".to_string()
+                };
+
                 println!(
-                    "Addr 0x{:X} -> ReadOk: {:?}, Bytes: {:?}",
+                    "Addr 0x{:X} -> ReadOk: {:?}, Val: {}, Bytes: {:?}",
                     addr,
                     status.is_ok(),
+                    debug_val,
                     buffer
                 );
             }
@@ -251,7 +273,7 @@ fn main() {
             continue;
         }
 
-        // If not a command, try to scan the value
+        // Parse target value
         let target_bytes = match current_type.parse_input_to_bytes(command) {
             Ok(b) => b,
             Err(_) => {
@@ -299,7 +321,29 @@ fn main() {
                         && read > 0
                     {
                         for i in (0..read.saturating_sub(type_size)).step_by(4) {
-                            if &buffer[i..i + type_size] == target_bytes.as_slice() {
+                            let is_match = match current_type {
+                                ScanType::F32 => {
+                                    // Conversion into memory byte in f32
+                                    let val_mem =
+                                        f32::from_le_bytes(buffer[i..i + 4].try_into().unwrap());
+                                    // Conversion of the target in f32
+                                    let val_target =
+                                        f32::from_le_bytes(target_bytes[0..4].try_into().unwrap());
+                                    // Verification with tolerance +/- 1.0
+                                    (val_mem - val_target).abs() <= 1.0
+                                }
+                                ScanType::F64 => {
+                                    let val_mem =
+                                        f64::from_le_bytes(buffer[i..i + 8].try_into().unwrap());
+                                    let val_target =
+                                        f64::from_le_bytes(target_bytes[0..8].try_into().unwrap());
+                                    (val_mem - val_target).abs() <= 1.0
+                                }
+                                // For the digits, keep same the filtering
+                                _ => &buffer[i..i + type_size] == target_bytes.as_slice(),
+                            };
+
+                            if is_match {
                                 found_addresses.push((address + i) as usize);
                             }
                         }
@@ -332,7 +376,21 @@ fn main() {
                 };
 
                 if res.is_ok() && read == type_size {
-                    return buffer == target_bytes;
+                    return match current_type {
+                        ScanType::F32 => {
+                            let val_mem = f32::from_le_bytes(buffer[0..4].try_into().unwrap());
+                            let val_target =
+                                f32::from_le_bytes(target_bytes[0..4].try_into().unwrap());
+                            (val_mem - val_target).abs() <= 1.0
+                        }
+                        ScanType::F64 => {
+                            let val_mem = f64::from_le_bytes(buffer[0..8].try_into().unwrap());
+                            let val_target =
+                                f64::from_le_bytes(target_bytes[0..8].try_into().unwrap());
+                            (val_mem - val_target).abs() <= 1.0
+                        }
+                        _ => buffer == target_bytes,
+                    };
                 }
                 false
             });
