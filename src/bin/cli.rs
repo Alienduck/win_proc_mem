@@ -30,10 +30,10 @@ enum ScanType {
 impl fmt::Display for ScanType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScanType::I32 => write!(f, "i32 (Entier 4 octets)"),
-            ScanType::I64 => write!(f, "i64 (Entier 8 octets)"),
-            ScanType::F32 => write!(f, "f32 (Float - Vie/Munitions)"),
-            ScanType::F64 => write!(f, "f64 (Double précision)"),
+            ScanType::I32 => write!(f, "i32 (Digit in 4 bytes)"),
+            ScanType::I64 => write!(f, "i64 (Digit in 8 bytes)"),
+            ScanType::F32 => write!(f, "f32 (Float - Health/Ammo)"),
+            ScanType::F64 => write!(f, "f64 (Double precision)"),
         }
     }
 }
@@ -55,19 +55,19 @@ impl ScanType {
             ScanType::I32 => input
                 .parse::<i32>()
                 .map(|v| v.to_le_bytes().to_vec())
-                .map_err(|_| "Ce n'est pas un i32 valide".to_string()),
+                .map_err(|_| "This isn't a valid i32".to_string()),
             ScanType::I64 => input
                 .parse::<i64>()
                 .map(|v| v.to_le_bytes().to_vec())
-                .map_err(|_| "Ce n'est pas un i64 valide".to_string()),
+                .map_err(|_| "This isn't a valid i64".to_string()),
             ScanType::F32 => input
                 .parse::<f32>()
                 .map(|v| v.to_le_bytes().to_vec())
-                .map_err(|_| "Ce n'est pas un f32 valide".to_string()),
+                .map_err(|_| "This isn't a valid f32".to_string()),
             ScanType::F64 => input
                 .parse::<f64>()
                 .map(|v| v.to_le_bytes().to_vec())
-                .map_err(|_| "Ce n'est pas un f64 valide".to_string()),
+                .map_err(|_| "This isn't a valid f64".to_string()),
         }
     }
 }
@@ -132,7 +132,7 @@ fn main() {
     let pid = match find_pid_by_name(&args.process_name) {
         Some(pid) => pid,
         None => {
-            println!("Processus introuvable.");
+            println!("Process not found.");
             return;
         }
     };
@@ -143,7 +143,7 @@ fn main() {
     let handle = match unsafe { OpenProcess(access_rights, false, pid) } {
         Ok(res) => res,
         Err(_) => {
-            println!("Impossible d'ouvrir le processus (Droits Admin requis ?).");
+            println!("Impossible to open the process memory (Become an admin ?).");
             return;
         }
     };
@@ -152,21 +152,21 @@ fn main() {
     let mut is_first_scan = true;
 
     let scan_types = vec![ScanType::I32, ScanType::F32, ScanType::I64, ScanType::F64];
-    let current_type = Select::new("Quel type de données scanner ?", scan_types)
+    let current_type = Select::new("What type of data are you looking for ?", scan_types)
         .prompt()
         .unwrap_or(ScanType::I32);
 
-    println!("Scanner configuré pour : {:?}", current_type);
+    println!("Scan config to : {:?}", current_type);
 
     loop {
         let prompt_msg = if is_first_scan {
             format!(
-                "Premier Scan ({:?}) - Entrez la valeur exacte :",
+                "First scan ({:?}) - Enter the value you have :",
                 current_type
             )
         } else {
             format!(
-                "Next Scan ({:?} | {} adresses) - Valeur, 'write', 'reset', 'debug' :",
+                "Next Scan ({:?} | {} adresses) - Value, 'write', 'reset', 'debug' :",
                 current_type,
                 found_addresses.len()
             )
@@ -186,15 +186,15 @@ fn main() {
         if command.eq_ignore_ascii_case("reset") {
             found_addresses.clear();
             is_first_scan = true;
-            println!("Scanner réinitialisé.");
+            println!("Scan reset.");
             continue;
         }
         if command.eq_ignore_ascii_case("debug") && !is_first_scan {
             if found_addresses.is_empty() {
-                println!("La liste est vide.");
+                println!("The list is empty ;_;.");
                 continue;
             }
-            println!("Aperçu des 5 premières adresses :");
+            println!("List of the 5 first adresses :");
             for &addr in found_addresses.iter().take(5) {
                 let mut buffer = vec![0u8; current_type.size()];
                 let mut read = 0;
@@ -219,11 +219,11 @@ fn main() {
 
         if command.eq_ignore_ascii_case("write") {
             if found_addresses.is_empty() {
-                println!("Aucune adresse trouvée pour écrire.");
+                println!("No adress found.");
                 continue;
             }
 
-            let val_input = Text::new("Nouvelle valeur à injecter :").prompt();
+            let val_input = Text::new("New value to inject :").prompt();
             if let Ok(val) = val_input {
                 if let Ok(bytes) = current_type.parse_input_to_bytes(val.trim()) {
                     let mut count = 0;
@@ -243,9 +243,9 @@ fn main() {
                             count += 1;
                         }
                     }
-                    println!("Succès : écrit sur {} adresses.", count);
+                    println!("Success : write on adress {}.", count);
                 } else {
-                    println!("Format de valeur incorrect.");
+                    println!("Wrong value format.");
                 }
             }
             continue;
@@ -255,13 +255,13 @@ fn main() {
         let target_bytes = match current_type.parse_input_to_bytes(command) {
             Ok(b) => b,
             Err(_) => {
-                println!("Commande inconnue ou format numérique invalide.");
+                println!("Command not found or numeric value/type.");
                 continue;
             }
         };
 
         if is_first_scan {
-            println!("Scan complet de la mémoire en cours...");
+            println!("Scan processing...");
             let mut address = 0usize;
             let type_size = current_type.size();
 
@@ -313,7 +313,7 @@ fn main() {
                 address = next;
             }
             is_first_scan = false;
-            println!("Scan terminé. {} adresses trouvées.", found_addresses.len());
+            println!("Scan finished. {} adresses found.", found_addresses.len());
         } else {
             let initial_count = found_addresses.len();
             let type_size = current_type.size();
@@ -338,7 +338,7 @@ fn main() {
             });
 
             println!(
-                "Filtrage terminé : {} -> {} adresses restantes.",
+                "Filtering complete : {} -> {} adresses remaining.",
                 initial_count,
                 found_addresses.len()
             );
