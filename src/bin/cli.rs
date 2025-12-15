@@ -33,7 +33,7 @@ impl fmt::Display for ScanType {
             ScanType::I32 => write!(f, "i32 (Digit in 4 bytes)"),
             ScanType::I64 => write!(f, "i64 (Digit in 8 bytes)"),
             ScanType::F32 => write!(f, "f32 (Float - Health/Ammo)"),
-            ScanType::F64 => write!(f, "f64 (Double precision)"),
+            ScanType::F64 => write!(f, "f64 (Double - Roblox Money/Large Numbers)"), // Updated description
         }
     }
 }
@@ -151,10 +151,10 @@ fn main() {
     let mut found_addresses: Vec<usize> = Vec::new();
     let mut is_first_scan = true;
 
-    let scan_types = vec![ScanType::I32, ScanType::F32, ScanType::I64, ScanType::F64];
+    let scan_types = vec![ScanType::F64, ScanType::F32, ScanType::I32, ScanType::I64];
     let current_type = Select::new("What type of data are you looking for ?", scan_types)
         .prompt()
-        .unwrap_or(ScanType::I32);
+        .unwrap_or(ScanType::F64);
 
     println!("Scan config to : {:?}", current_type);
 
@@ -323,23 +323,26 @@ fn main() {
                         for i in (0..read.saturating_sub(type_size)).step_by(4) {
                             let is_match = match current_type {
                                 ScanType::F32 => {
-                                    // Conversion into memory byte in f32
                                     let val_mem =
                                         f32::from_le_bytes(buffer[i..i + 4].try_into().unwrap());
-                                    // Conversion of the target in f32
                                     let val_target =
                                         f32::from_le_bytes(target_bytes[0..4].try_into().unwrap());
-                                    // Verification with tolerance +/- 1.0
-                                    (val_mem - val_target).abs() <= 1.0
+
+                                    // ADAPTIVE TOLERANCE
+                                    // 1% of the value OR 1.0 minimum
+                                    let epsilon = (val_target.abs() * 0.01).max(1.0);
+                                    (val_mem - val_target).abs() <= epsilon
                                 }
                                 ScanType::F64 => {
                                     let val_mem =
                                         f64::from_le_bytes(buffer[i..i + 8].try_into().unwrap());
                                     let val_target =
                                         f64::from_le_bytes(target_bytes[0..8].try_into().unwrap());
-                                    (val_mem - val_target).abs() <= 1.0
+
+                                    // ADAPTIVE TOLERANCE
+                                    let epsilon = (val_target.abs() * 0.01).max(1.0);
+                                    (val_mem - val_target).abs() <= epsilon
                                 }
-                                // For the digits, keep same the filtering
                                 _ => &buffer[i..i + type_size] == target_bytes.as_slice(),
                             };
 
@@ -381,13 +384,17 @@ fn main() {
                             let val_mem = f32::from_le_bytes(buffer[0..4].try_into().unwrap());
                             let val_target =
                                 f32::from_le_bytes(target_bytes[0..4].try_into().unwrap());
-                            (val_mem - val_target).abs() <= 1.0
+
+                            let epsilon = (val_target.abs() * 0.01).max(1.0);
+                            (val_mem - val_target).abs() <= epsilon
                         }
                         ScanType::F64 => {
                             let val_mem = f64::from_le_bytes(buffer[0..8].try_into().unwrap());
                             let val_target =
                                 f64::from_le_bytes(target_bytes[0..8].try_into().unwrap());
-                            (val_mem - val_target).abs() <= 1.0
+
+                            let epsilon = (val_target.abs() * 0.01).max(1.0);
+                            (val_mem - val_target).abs() <= epsilon
                         }
                         _ => buffer == target_bytes,
                     };
